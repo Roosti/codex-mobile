@@ -1,7 +1,10 @@
 # codex-mobile
 
-[![CI](https://github.com/Roosti/codex-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Rooosti/codex-mobile/actions/workflows/ci.yml)
+[![CI](https://github.com/Roosti/codex-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Roosti/codex-mobile/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111827.svg)](LICENSE)
+
+This is a micro-project made out of spite; my University provides Codex and workspace but not remote access.
+Glory to my workaround.
 
 > Run a Codex CLI session on your Linux computer and reconnect to it from your phone.
 
