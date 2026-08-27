@@ -4,8 +4,8 @@
 
 - [Tailscale for iOS](https://tailscale.com/docs/install/ios) creates the
   private connection to your Linux PC.
-- [Termius for iOS](https://termius.com/download/ios) is the easiest general SSH
-  client for this setup. Its free features are enough for a basic host.
+- [Termius for iOS](https://termius.com/download/ios) is an easy general SSH
+  client for this setup.
 
 Blink Shell is also solid if you already own it. The SSH app does not need to
 match Kitty; tmux handles the terminal session on the PC.

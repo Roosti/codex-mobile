@@ -76,7 +76,7 @@ same `codex-mobile` command later to reconnect.
 Codex options can follow `--` when creating a new session:
 
 ```bash
-codex-mobile ~/code/my-app -- --full-auto
+codex-mobile ~/code/my-app -- --search
 ```
 
 ## Authentication modes

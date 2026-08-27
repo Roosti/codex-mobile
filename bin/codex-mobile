@@ -28,7 +28,7 @@ Examples:
   codex-mobile
   codex-mobile ~/code/my-app
   codex-mobile -s api ~/code/api
-  codex-mobile ~/code/my-app -- --full-auto
+  codex-mobile ~/code/my-app -- --search
 
 Detach without stopping Codex: Ctrl-b, then d
 EOF

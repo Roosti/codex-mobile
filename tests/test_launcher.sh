@@ -71,9 +71,9 @@ if "$LAUNCHER" --session 'bad/name' "$PROJECT_DIR" >/dev/null 2>&1; then
 fi
 
 : >"$FAKE_LOG"
-FAKE_SESSION_EXISTS=false "$LAUNCHER" --detach --session demo "$PROJECT_DIR" -- --full-auto >/dev/null
+FAKE_SESSION_EXISTS=false "$LAUNCHER" --detach --session demo "$PROJECT_DIR" -- --search >/dev/null
 assert_contains "$FAKE_LOG" "tmux[has-session][-t][demo]"
-assert_contains "$FAKE_LOG" "tmux[new-session][-d][-s][demo][-c][$PROJECT_DIR][--][$FAKE_BIN/codex][-C][$PROJECT_DIR][--full-auto]"
+assert_contains "$FAKE_LOG" "tmux[new-session][-d][-s][demo][-c][$PROJECT_DIR][--][$FAKE_BIN/codex][-C][$PROJECT_DIR][--search]"
 
 : >"$FAKE_LOG"
 FAKE_SESSION_EXISTS=true "$LAUNCHER" --session demo "$PROJECT_DIR" >/dev/null
