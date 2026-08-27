@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly CODEX_MOBILE_VERSION="0.1.0"
+
+session_name="${CODEX_MOBILE_SESSION:-codex-mobile}"
+project_dir=""
+action="start"
+attach_session=true
+declare -a codex_args=()
+
+usage() {
+  cat <<'EOF'
+Usage: codex-mobile [OPTIONS] [PROJECT_DIRECTORY] [-- CODEX_OPTIONS]
+
+Start Codex in a persistent tmux session or reconnect to it.
+
+Options:
+  -s, --session NAME  Use a named tmux session (default: codex-mobile)
+  -d, --detach        Start the session without attaching
+  -l, --list          List Codex/tmux sessions
+      --stop          Stop the selected session
+      --version       Print the version
+  -h, --help          Show this help
+
+Examples:
+  codex-mobile
+  codex-mobile ~/code/my-app
+  codex-mobile -s api ~/code/api
+  codex-mobile ~/code/my-app -- --full-auto
+
+Detach without stopping Codex: Ctrl-b, then d
+EOF
+}
+
+die() {
+  printf 'codex-mobile: %s\n' "$*" >&2
+  exit 1
+}
+
+while (($# > 0)); do
+  case "$1" in
+    -s|--session)
+      (($# >= 2)) || die "$1 needs a name"
+      session_name="$2"
+      shift 2
+      ;;
+    -d|--detach)
+      attach_session=false
+      shift
+      ;;
+    -l|--list)
+      action="list"
+      shift
+      ;;
+    --stop)
+      action="stop"
+      shift
+      ;;
+    --version)
+      printf 'codex-mobile %s\n' "$CODEX_MOBILE_VERSION"
+      exit 0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      codex_args=("$@")
+      break
+      ;;
+    -*)
+      die "unknown option: $1"
+      ;;
+    *)
+      [[ -z "$project_dir" ]] || die "only one project directory is allowed"
+      project_dir="$1"
+      shift
+      ;;
+  esac
+done
+
+[[ "$session_name" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] ||
+  die "session names may contain letters, numbers, underscores, and dashes"
+
+command -v tmux >/dev/null 2>&1 || die "tmux is not installed"
+
+case "$action" in
+  list)
+    if ! tmux list-sessions -F '#{session_name}  #{session_windows} window(s)  #{session_created_string}' 2>/dev/null; then
+      printf 'No tmux sessions are running.\n'
+    fi
+    exit 0
+    ;;
+  stop)
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+      tmux kill-session -t "$session_name"
+      printf 'Stopped %s.\n' "$session_name"
+    else
+      printf 'No session named %s is running.\n' "$session_name"
+    fi
+    exit 0
+    ;;
+esac
+
+codex_bin="$(command -v codex)" || die "Codex is not available on PATH"
+
+project_dir="${project_dir:-$PWD}"
+requested_project_dir="$project_dir"
+if ! project_dir="$(realpath -e -- "$requested_project_dir" 2>/dev/null)" || [[ ! -d "$project_dir" ]]; then
+  die "project directory does not exist: $requested_project_dir"
+fi
+
+# Running the launcher from an existing tmux session should not create a nested
+# client. Detached mode still creates a separate named session when requested.
+if [[ -n "${TMUX:-}" && "$attach_session" == true ]]; then
+  exec "$codex_bin" -C "$project_dir" "${codex_args[@]}"
+fi
+
+if tmux has-session -t "$session_name" 2>/dev/null; then
+  if ((${#codex_args[@]} > 0)); then
+    printf 'Session %s already exists; extra Codex options were ignored.\n' "$session_name" >&2
+  fi
+
+  if [[ "$attach_session" == true ]]; then
+    exec tmux attach-session -t "$session_name"
+  fi
+
+  printf '%s is already running. Attach with: tmux attach -t %s\n' "$session_name" "$session_name"
+  exit 0
+fi
+
+tmux new-session -d -s "$session_name" -c "$project_dir" -- \
+  "$codex_bin" -C "$project_dir" "${codex_args[@]}"
+
+if [[ "$attach_session" == true ]]; then
+  exec tmux attach-session -t "$session_name"
+fi
+
+printf 'Started %s. Attach with: tmux attach -t %s\n' "$session_name" "$session_name"

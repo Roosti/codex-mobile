@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+usage() {
+  cat <<'EOF'
+Usage: codex-mobile-add-key PUBLIC_KEY_FILE
+
+Add one public SSH key to the current user's authorized_keys file.
+Ed25519 keys are recommended. Never pass a private key here.
+EOF
+}
+
+die() {
+  printf 'codex-mobile-add-key: %s\n' "$*" >&2
+  exit 1
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+(($# == 1)) || {
+  usage >&2
+  exit 1
+}
+
+readonly key_file="$1"
+[[ -f "$key_file" ]] || die "not a file: $key_file"
+command -v ssh-keygen >/dev/null 2>&1 || die "ssh-keygen is not installed"
+
+line_count="$(awk 'END { print NR }' "$key_file")"
+[[ "$line_count" == 1 ]] || die "the file must contain exactly one public key"
+
+key_type="$(awk 'NR == 1 { print $1 }' "$key_file")"
+case "$key_type" in
+  ssh-ed25519|sk-ssh-ed25519@openssh.com|ecdsa-sha2-*|sk-ecdsa-sha2-nistp256@openssh.com|ssh-rsa)
+    ;;
+  *)
+    die "unsupported or invalid public key type: ${key_type:-empty}"
+    ;;
+esac
+
+ssh-keygen -l -f "$key_file" >/dev/null 2>&1 || die "ssh-keygen rejected this public key"
+
+readonly ssh_dir="$HOME/.ssh"
+readonly authorized_keys="$ssh_dir/authorized_keys"
+key_blob="$(awk 'NR == 1 { print $2 }' "$key_file")"
+
+mkdir -p -- "$ssh_dir"
+chmod 700 -- "$ssh_dir"
+touch -- "$authorized_keys"
+chmod 600 -- "$authorized_keys"
+
+if awk -v blob="$key_blob" '$2 == blob { found = 1 } END { exit !found }' "$authorized_keys"; then
+  printf 'Key is already authorized.\n'
+  exit 0
+fi
+
+sed -n '1p' "$key_file" >>"$authorized_keys"
+printf 'Added key: '
+ssh-keygen -l -f "$key_file"
