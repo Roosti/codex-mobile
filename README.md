@@ -130,4 +130,4 @@ To also disable Tailscale SSH on the computer:
 
 ## License
 
-MIT © 2026 Rooosti
+MIT © 2026 Roosti
