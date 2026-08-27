@@ -1,6 +1,6 @@
 # codex-mobile
 
-[![CI](https://github.com/Rooosti/codex-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Rooosti/codex-mobile/actions/workflows/ci.yml)
+[![CI](https://github.com/Roosti/codex-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/Rooosti/codex-mobile/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111827.svg)](LICENSE)
 
 > Run a Codex CLI session on your Linux computer and reconnect to it from your phone.
