@@ -28,7 +28,7 @@ export HOME="$TEST_HOME"
 export PATH="$FAKE_BIN:/usr/bin:/bin"
 unset XDG_CONFIG_HOME
 
-bash "$ROOT_DIR/install.sh" --skip-deps --skip-connect
+bash "$ROOT_DIR/install.sh" --skip-deps --skip-connect >/dev/null
 
 [[ -x "$TEST_HOME/.local/bin/codex-mobile" ]] || fail "launcher was not installed"
 [[ -x "$TEST_HOME/.local/bin/codex-mobile-add-key" ]] || fail "key helper was not installed"

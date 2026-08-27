@@ -123,14 +123,21 @@ readonly CONFIG_DIR="${CODEX_MOBILE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config
 readonly TMUX_FILE="${CODEX_MOBILE_TMUX_FILE:-$HOME/.tmux.conf}"
 
 distro_family=""
+distro_tokens=""
+
 if [[ -r /etc/os-release ]]; then
-  # Parse the tokens inside a subshell to avoid crashing on readonly variables
-  distro_tokens=$(
-    # shellcheck disable=SC1091
-    source /etc/os-release 2>/dev/null
-    printf " %s %s " "${ID:-}" "${ID_LIKE:-}"
-  )
-  
+  while IFS='=' read -r key value; do
+    case "$key" in
+      ID|ID_LIKE)
+        value="${value#\"}"
+        value="${value%\"}"
+        value="${value#\'}"
+        value="${value%\'}"
+        distro_tokens+=" $value "
+        ;;
+    esac
+  done </etc/os-release
+
   case "$distro_tokens" in
     *" arch "*)
       distro_family="arch"

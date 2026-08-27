@@ -26,4 +26,11 @@ jobs:
         run: shellcheck install.sh uninstall.sh bin/* tests/*.sh
 
       - name: Run tests
-        run: bash tests/run.sh
+        shell: bash
+        run: |
+          if [[ "$EUID" -eq 0 ]]; then
+            useradd --create-home --shell /bin/bash ci-runner
+            runuser -u ci-runner -- bash "$GITHUB_WORKSPACE/tests/run.sh"
+          else
+            bash tests/run.sh
+          fi
