@@ -124,9 +124,13 @@ readonly TMUX_FILE="${CODEX_MOBILE_TMUX_FILE:-$HOME/.tmux.conf}"
 
 distro_family=""
 if [[ -r /etc/os-release ]]; then
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  distro_tokens=" ${ID:-} ${ID_LIKE:-} "
+  # Parse the tokens inside a subshell to avoid crashing on readonly variables
+  distro_tokens=$(
+    # shellcheck disable=SC1091
+    source /etc/os-release 2>/dev/null
+    printf " %s %s " "${ID:-}" "${ID_LIKE:-}"
+  )
+  
   case "$distro_tokens" in
     *" arch "*)
       distro_family="arch"
@@ -139,7 +143,6 @@ if [[ -r /etc/os-release ]]; then
       ;;
   esac
 fi
-
 install_tailscale_official() {
   if command -v tailscale >/dev/null 2>&1; then
     return
