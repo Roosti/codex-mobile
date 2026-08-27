@@ -28,7 +28,7 @@ export HOME="$TEST_HOME"
 export PATH="$FAKE_BIN:/usr/bin:/bin"
 unset XDG_CONFIG_HOME
 
-bash "$ROOT_DIR/install.sh" --skip-deps --skip-connect >/dev/null
+bash "$ROOT_DIR/install.sh" --skip-deps --skip-connect
 
 [[ -x "$TEST_HOME/.local/bin/codex-mobile" ]] || fail "launcher was not installed"
 [[ -x "$TEST_HOME/.local/bin/codex-mobile-add-key" ]] || fail "key helper was not installed"
@@ -37,8 +37,8 @@ cmp -s "$ROOT_DIR/bin/codex-mobile" "$TEST_HOME/.local/bin/codex-mobile" ||
   fail "installed launcher differs from source"
 
 bash "$ROOT_DIR/install.sh" --skip-deps --skip-connect >/dev/null
-marker_count="$(grep -Fc '# >>> codex-mobile >>>' "$TEST_HOME/.tmux.conf")"
-[[ "$marker_count" == 1 ]] || fail "installer is not idempotent"
+marker_count="$(grep -Fc '# >>> codex-mobile >>>' "$TEST_HOME/.tmux.conf" || true)"
+[[ "$marker_count" == 1 ]] || fail "installer is not idempotent; marker count: $marker_count"
 
 if command -v ssh-keygen >/dev/null 2>&1; then
   ssh-keygen -q -t ed25519 -N '' -f "$TEST_TMP/phone-key"
