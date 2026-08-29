@@ -59,15 +59,23 @@ CLI is not installed or signed in yet.
 
 ## It opens the wrong project
 
-The default named session persists, including its original working directory.
-Stop it or choose another name:
+Each named session is associated with its canonical project directory. If the
+requested directory differs, the launcher refuses and prints both paths. Use a
+different session name, or stop and recreate the old session if it is no longer
+needed:
 
 ```bash
 codex-mobile --stop
 codex-mobile -s other ~/code/other
 ```
 
+Running `codex-mobile` without a directory reconnects the selected session
+from any current directory. Its stored project remains unchanged.
+
 Options passed after `--` only apply while a new session is created.
+
+Sessions created by an older codex-mobile version have no directory metadata
+and are also refused. Stop and recreate such a session once to record it.
 
 ## Colors look wrong
 
@@ -84,9 +92,10 @@ Kitty and Hyprland do not need any changes. On a very old distro without
 
 ## `sessions should be nested with care`
 
-The launcher avoids nesting when it detects `$TMUX`. If you manually run
-`tmux attach` inside tmux, use `tmux switch-client -t SESSION` instead, or
-detach the outer client first.
+The launcher never starts a nested tmux client. From inside tmux,
+`codex-mobile -s NAME PROJECT` creates or selects that named session and uses
+`tmux switch-client`; from outside tmux it attaches normally. If you invoke
+tmux manually from inside a session, use `tmux switch-client -t SESSION`.
 
 ## My phone disconnected and Codex vanished
 

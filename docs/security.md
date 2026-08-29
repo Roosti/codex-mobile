@@ -82,8 +82,11 @@ machine.
 | Revocation | Disable phone/user/rule | Remove key and/or disable phone |
 
 Key mode still benefits from Tailscale network policy, but OpenSSH may listen
-on other interfaces. The installer does not silently rewrite global sshd or
-firewall rules. Harden it explicitly using [SSH key mode](ssh-key-mode.md).
+on LAN or public interfaces depending on sshd configuration. The installer
+requires and validates a public key before changing files, packages, services,
+or Tailscale SSH mode. It does not silently disable password authentication,
+rewrite global sshd configuration, or change firewall rules. Harden OpenSSH
+explicitly using [SSH key mode](ssh-key-mode.md).
 
 ## Secrets that must never enter this repository
 

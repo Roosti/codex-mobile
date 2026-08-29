@@ -57,6 +57,39 @@ readonly BIN_DIR="${CODEX_MOBILE_BIN_DIR:-$HOME/.local/bin}"
 readonly CONFIG_DIR="${CODEX_MOBILE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-mobile}"
 readonly TMUX_FILE="${CODEX_MOBILE_TMUX_FILE:-$HOME/.tmux.conf}"
 
+validate_tmux_markers() {
+  [[ -f "$TMUX_FILE" ]] || return 0
+
+  local end_count end_line reason start_count start_line
+  read -r start_count end_count start_line end_line < <(
+    awk -v start="$TMUX_MARKER_START" -v end="$TMUX_MARKER_END" '
+      $0 == start { start_count++; if (!start_line) start_line = NR }
+      $0 == end { end_count++; if (!end_line) end_line = NR }
+      END { print start_count + 0, end_count + 0, start_line + 0, end_line + 0 }
+    ' "$TMUX_FILE"
+  )
+
+  if [[ "$start_count" == 0 && "$end_count" == 0 ]]; then
+    return 0
+  elif [[ "$start_count" == 0 ]]; then
+    reason="an end marker exists without a start marker"
+  elif [[ "$end_count" == 0 ]]; then
+    reason="a start marker exists without an end marker"
+  elif [[ "$start_count" != 1 ]]; then
+    reason="$start_count start markers exist; exactly one is required"
+  elif [[ "$end_count" != 1 ]]; then
+    reason="$end_count end markers exist; exactly one is required"
+  elif ((start_line >= end_line)); then
+    reason="the end marker appears before the start marker"
+  else
+    return 0
+  fi
+
+  die "the codex-mobile block in $TMUX_FILE is malformed: $reason. Repair the marker block manually, then rerun the uninstaller"
+}
+
+validate_tmux_markers
+
 remove_file() {
   if [[ -e "$1" || -L "$1" ]]; then
     if [[ "$dry_run" == true ]]; then
@@ -69,16 +102,8 @@ remove_file() {
 }
 
 remove_tmux_source() {
-  [[ -f "$TMUX_FILE" ]] || return
-  grep -Fqx "$TMUX_MARKER_START" "$TMUX_FILE" || return
-
-  local start_count end_count
-  start_count="$(grep -Fxc "$TMUX_MARKER_START" "$TMUX_FILE")"
-  end_count="$(grep -Fxc "$TMUX_MARKER_END" "$TMUX_FILE" || true)"
-  if [[ "$start_count" != 1 || "$end_count" != 1 ]]; then
-    printf 'Preserved %s: the codex-mobile marker block is malformed.\n' "$TMUX_FILE" >&2
-    return
-  fi
+  [[ -f "$TMUX_FILE" ]] || return 0
+  grep -Fqx "$TMUX_MARKER_START" "$TMUX_FILE" || return 0
 
   if [[ "$dry_run" == true ]]; then
     printf 'Would remove the codex-mobile block from %s\n' "$TMUX_FILE"

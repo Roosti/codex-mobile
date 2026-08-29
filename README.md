@@ -29,7 +29,7 @@ The installer supports Arch, Debian/Ubuntu, and Fedora/RHEL-family systems.
 ## Install on your Linux computer
 
 ```bash
-git clone https://github.com/Rooosti/codex-mobile.git
+git clone https://github.com/Roosti/codex-mobile.git
 cd codex-mobile
 ./install.sh
 ```
@@ -73,6 +73,13 @@ codex-mobile -s api --stop           # stop a named session
 Inside tmux, press `Ctrl-b`, then `d` to disconnect without stopping Codex.
 Run the same command later to reconnect.
 
+Each session records the project directory it was created for. Reusing that
+session with an explicitly different directory is refused instead of opening
+the wrong project; use `-s NAME` for another project. Omitting the directory
+reconnects the selected session from any current directory. When run from
+inside tmux, the launcher switches the current client to the requested session
+rather than starting Codex in the current window or nesting tmux.
+
 Pass Codex options after `--` when creating a session:
 
 ```bash
@@ -86,21 +93,24 @@ codex-mobile ~/code/my-app -- --search
 | `tailscale` (default) | Tailnet identity and policy | You want the simplest setup |
 | `key` | Tailnet access plus an SSH public key | You want standard OpenSSH |
 
-To use key mode:
+Key mode requires one valid OpenSSH public key file. It enables the system
+OpenSSH service, which may listen on LAN or public interfaces depending on the
+machine's sshd configuration. The installer does not change firewall rules,
+disable password authentication, or rewrite global sshd configuration. Read
+[SSH key mode](docs/ssh-key-mode.md) before running:
 
 ```bash
 ./install.sh --mode key --key-file phone.pub
 ```
 
-Key mode disables Tailscale SSH and enables the operating system's OpenSSH
-service. Read [SSH key mode](docs/ssh-key-mode.md) first.
+The public key is validated before installation or SSH/Tailscale changes.
 
 ## Installer options
 
 ```text
 --mode tailscale   use Tailscale SSH (recommended)
 --mode key         use standard OpenSSH public-key authentication
---key-file FILE    add one phone public key
+--key-file FILE    required public key when using --mode key
 --skip-deps        skip the system package manager
 --skip-connect     install files without changing services or SSH mode
 --dry-run          print privileged setup commands without running them
@@ -108,6 +118,9 @@ service. Read [SSH key mode](docs/ssh-key-mode.md) first.
 
 If you install Tailscale yourself, follow the [official Linux guide](https://tailscale.com/docs/install/linux),
 then run `./install.sh --skip-deps`.
+
+`VERSION` is the release version source. Installation stamps it into the
+launcher, so `codex-mobile --version` does not depend on the source checkout.
 
 ## Uninstall
 

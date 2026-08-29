@@ -42,6 +42,9 @@ phone's node identity and the tailnet policy authorizes the Linux username.
 - Reconnect: run `codex-mobile` again
 - Stop the session: `codex-mobile --stop`
 
+Use `codex-mobile -s NAME /path/to/project` for multiple projects. Each name
+remains associated with the directory where its session was created.
+
 If Termius has a modifier-key row, use its `Ctrl` key. `Ctrl-b` is two keys at
 once, followed by a separate `d`.
 

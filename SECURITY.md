@@ -1,8 +1,9 @@
 # Security policy
 
-Please report a vulnerability through GitHub's private **Report a
-vulnerability** flow instead of a public issue. Include the affected version,
-setup mode, impact, and a minimal reproduction with secrets removed.
+Please use GitHub's private
+[Report a vulnerability](https://github.com/Roosti/codex-mobile/security/advisories/new)
+flow instead of a public issue. Include the affected version, setup mode,
+impact, and a minimal reproduction with secrets removed.
 
 Do not send private SSH keys, Codex credentials, Tailscale auth URLs, access
 tokens, real tailnet policy files, or personal host inventories.

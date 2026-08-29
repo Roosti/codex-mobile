@@ -3,10 +3,17 @@
 Use this only if you specifically want OpenSSH public-key authentication.
 Tailscale SSH is simpler and is the default.
 
+> **Warning:** Enabling OpenSSH can make port 22 listen on LAN or public
+> interfaces depending on the machine's sshd configuration. The installer does
+> not change firewall rules, disable password authentication, or rewrite sshd
+> globally. Review the host before proceeding.
+
 ## Set it up
 
 Generate an Ed25519 key in the mobile SSH app. Move only its `.pub` public-key
-file to the host, then run:
+file to the host. Key mode requires this file and validates it with
+`ssh-keygen` before making installation, service, or Tailscale changes. Ensure
+the OpenSSH client tools are installed, then run:
 
 ```bash
 ./install.sh --mode key --key-file ~/Downloads/phone_ed25519.pub
@@ -15,7 +22,8 @@ file to the host, then run:
 This installs/enables the system OpenSSH server, adds the public key to the
 current user's `~/.ssh/authorized_keys`, joins Tailscale if needed, and disables
 Tailscale SSH interception on the host. It never copies or reads the phone's
-private key.
+private key. `--mode key` without `--key-file`, or with a missing or malformed
+key, fails without changing the machine.
 
 To add another phone later:
 
@@ -32,8 +40,9 @@ ssh -i ~/.ssh/phone_ed25519 your-user@your-pc-hostname
 ## Harden OpenSSH
 
 OpenSSH may listen on LAN/public interfaces in addition to Tailscale. Confirm
-that your router does not forward port 22 and use host firewall rules if you
-need tailnet-only reachability.
+that your router does not forward port 22. If you need tailnet-only
+reachability, review and configure the host firewall yourself; codex-mobile
+does not modify it.
 
 After verifying key login in a second terminal, consider this sshd drop-in:
 

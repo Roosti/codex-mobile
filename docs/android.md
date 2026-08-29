@@ -37,6 +37,10 @@ codex-mobile ~/code/your-project
 Detach with `Ctrl-b`, then `d`. Android may suspend the SSH app, but tmux keeps
 the host-side session alive.
 
+Use a distinct name for each project, such as
+`codex-mobile -s api ~/code/api`. A session cannot later be reused for a
+different project directory.
+
 ## Connect from Termius
 
 Create a host with the PC's MagicDNS name, port `22`, and your Linux username.

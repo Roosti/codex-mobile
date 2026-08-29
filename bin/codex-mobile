@@ -2,10 +2,25 @@
 
 set -Eeuo pipefail
 
-readonly CODEX_MOBILE_VERSION="0.1.0"
+CODEX_MOBILE_VERSION="__CODEX_MOBILE_VERSION__"
+if [[ "$CODEX_MOBILE_VERSION" == "__CODEX_MOBILE_VERSION__" ]]; then
+  source_version_file="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)/VERSION"
+  if ! IFS= read -r CODEX_MOBILE_VERSION <"$source_version_file" ||
+    [[ -z "$CODEX_MOBILE_VERSION" ]]; then
+    printf 'codex-mobile: cannot read project version from %s\n' "$source_version_file" >&2
+    exit 1
+  fi
+fi
+if [[ ! "$CODEX_MOBILE_VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
+  printf 'codex-mobile: invalid project version: %s\n' "$CODEX_MOBILE_VERSION" >&2
+  exit 1
+fi
+readonly CODEX_MOBILE_VERSION
+readonly SESSION_PROJECT_OPTION="@codex-mobile-project"
 
 session_name="${CODEX_MOBILE_SESSION:-codex-mobile}"
 project_dir=""
+project_dir_explicit=false
 action="start"
 attach_session=true
 declare -a codex_args=()
@@ -15,6 +30,8 @@ usage() {
 Usage: codex-mobile [OPTIONS] [PROJECT_DIRECTORY] [-- CODEX_OPTIONS]
 
 Start Codex in a persistent tmux session or reconnect to it.
+Each session is bound to the project directory used when it was created.
+Omit PROJECT_DIRECTORY to reconnect without comparing it to the current path.
 
 Options:
   -s, --session NAME  Use a named tmux session (default: codex-mobile)
@@ -31,6 +48,7 @@ Examples:
   codex-mobile ~/code/my-app -- --search
 
 Detach without stopping Codex: Ctrl-b, then d
+Inside tmux, the current client switches to the selected session.
 EOF
 }
 
@@ -77,6 +95,7 @@ while (($# > 0)); do
     *)
       [[ -z "$project_dir" ]] || die "only one project directory is allowed"
       project_dir="$1"
+      project_dir_explicit=true
       shift
       ;;
   esac
@@ -87,6 +106,14 @@ done
 
 command -v tmux >/dev/null 2>&1 || die "tmux is not installed"
 
+session_exists() {
+  local running_session
+  while IFS= read -r running_session; do
+    [[ "$running_session" == "$session_name" ]] && return 0
+  done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+  return 1
+}
+
 case "$action" in
   list)
     if ! tmux list-sessions -F '#{session_name}  #{session_windows} window(s)  #{session_created_string}' 2>/dev/null; then
@@ -95,7 +122,7 @@ case "$action" in
     exit 0
     ;;
   stop)
-    if tmux has-session -t "$session_name" 2>/dev/null; then
+    if session_exists; then
       tmux kill-session -t "$session_name"
       printf 'Stopped %s.\n' "$session_name"
     else
@@ -107,24 +134,48 @@ esac
 
 codex_bin="$(command -v codex)" || die "Codex is not available on PATH"
 
-project_dir="${project_dir:-$PWD}"
-requested_project_dir="$project_dir"
-if ! project_dir="$(realpath -e -- "$requested_project_dir" 2>/dev/null)" || [[ ! -d "$project_dir" ]]; then
-  die "project directory does not exist: $requested_project_dir"
+if [[ "$project_dir_explicit" == true ]]; then
+  requested_project_dir="$project_dir"
+  if ! project_dir="$(realpath -e -- "$requested_project_dir" 2>/dev/null)" ||
+    [[ ! -d "$project_dir" ]]; then
+    die "project directory does not exist: $requested_project_dir"
+  fi
 fi
 
-# Running the launcher from an existing tmux session should not create a nested
-# client. Detached mode still creates a separate named session when requested.
-if [[ -n "${TMUX:-}" && "$attach_session" == true ]]; then
-  exec "$codex_bin" -C "$project_dir" "${codex_args[@]}"
-fi
+if session_exists; then
+  if ! existing_project_dir="$(
+    tmux show-options -v -t "$session_name" "$SESSION_PROJECT_OPTION" 2>/dev/null
+  )" || [[ -z "$existing_project_dir" ]]; then
+    cat >&2 <<EOF
+codex-mobile: session "$session_name" has no project-directory metadata.
 
-if tmux has-session -t "$session_name" 2>/dev/null; then
+It may predate this safety check. Stop and recreate it, or use -s NAME to
+create another session.
+EOF
+    exit 1
+  fi
+
+  if [[ "$project_dir_explicit" == true && "$existing_project_dir" != "$project_dir" ]]; then
+    cat >&2 <<EOF
+codex-mobile: session "$session_name" is already running in:
+$existing_project_dir
+
+Requested:
+$project_dir
+
+Use -s NAME to create another session.
+EOF
+    exit 1
+  fi
+
   if ((${#codex_args[@]} > 0)); then
     printf 'Session %s already exists; extra Codex options were ignored.\n' "$session_name" >&2
   fi
 
   if [[ "$attach_session" == true ]]; then
+    if [[ -n "${TMUX:-}" ]]; then
+      exec tmux switch-client -t "$session_name"
+    fi
     exec tmux attach-session -t "$session_name"
   fi
 
@@ -132,10 +183,25 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
   exit 0
 fi
 
+if [[ "$project_dir_explicit" == false ]]; then
+  requested_project_dir="$PWD"
+  if ! project_dir="$(realpath -e -- "$requested_project_dir" 2>/dev/null)" ||
+    [[ ! -d "$project_dir" ]]; then
+    die "project directory does not exist: $requested_project_dir"
+  fi
+fi
+
 tmux new-session -d -s "$session_name" -c "$project_dir" -- \
   "$codex_bin" -C "$project_dir" "${codex_args[@]}"
+if ! tmux set-option -t "$session_name" "$SESSION_PROJECT_OPTION" "$project_dir"; then
+  tmux kill-session -t "$session_name" 2>/dev/null || true
+  die "could not record project metadata for session \"$session_name\""
+fi
 
 if [[ "$attach_session" == true ]]; then
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$session_name"
+  fi
   exec tmux attach-session -t "$session_name"
 fi
 

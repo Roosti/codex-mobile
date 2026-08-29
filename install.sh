@@ -2,12 +2,23 @@
 
 set -Eeuo pipefail
 
-readonly VERSION="0.1.0"
 readonly TAILSCALE_INSTALL_URL="https://tailscale.com/install.sh"
 readonly TMUX_MARKER_START="# >>> codex-mobile >>>"
 readonly TMUX_MARKER_END="# <<< codex-mobile <<<"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
+readonly VERSION_FILE="$SCRIPT_DIR/VERSION"
+
+if ! IFS= read -r VERSION <"$VERSION_FILE" || [[ -z "$VERSION" ]]; then
+  printf 'install: cannot read project version from %s\n' "$VERSION_FILE" >&2
+  exit 1
+fi
+if [[ ! "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.+-]+)?$ ]]; then
+  printf 'install: invalid version in %s: %s\n' "$VERSION_FILE" "$VERSION" >&2
+  exit 1
+fi
+readonly VERSION
+readonly LAUNCHER_VERSION_TEMPLATE='CODEX_MOBILE_VERSION="__CODEX_MOBILE_VERSION__"'
 
 mode="tailscale"
 key_file=""
@@ -24,7 +35,7 @@ Install codex-mobile for the current Linux user.
 Options:
       --mode tailscale  Use Tailscale SSH identity (default, recommended)
       --mode key        Use OpenSSH over Tailscale with a public key
-      --key-file FILE   Add a public key when using --mode key
+      --key-file FILE   Required public key when using --mode key
       --skip-deps       Do not install tmux, Tailscale, or OpenSSH packages
       --skip-connect    Do not start services, log in, or change SSH mode
       --dry-run         Print privileged setup commands without running them
@@ -32,6 +43,7 @@ Options:
 
 Supported package families: Arch, Debian/Ubuntu, Fedora/RHEL.
 Run this script as your normal user; it asks for sudo only when needed.
+Key mode may expose OpenSSH on non-Tailscale interfaces; review sshd first.
 EOF
 }
 
@@ -76,6 +88,16 @@ run_root() {
   fi
 }
 
+launcher_template_count="$(
+  awk -v template="$LAUNCHER_VERSION_TEMPLATE" '
+    $0 == template { count++ }
+    END { print count + 0 }
+  ' "$SCRIPT_DIR/bin/codex-mobile"
+)"
+[[ "$launcher_template_count" == 1 ]] ||
+  die "launcher template must contain exactly one version placeholder; found $launcher_template_count"
+readonly launcher_template_count
+
 while (($# > 0)); do
   case "$1" in
     --mode)
@@ -112,6 +134,21 @@ done
 
 [[ "$mode" == "tailscale" || "$mode" == "key" ]] || die "--mode must be tailscale or key"
 [[ "$mode" == "key" || -z "$key_file" ]] || die "--key-file only works with --mode key"
+
+if [[ "$mode" == "key" ]]; then
+  [[ -n "$key_file" ]] || die "--mode key requires --key-file PUBLIC_KEY_FILE"
+  [[ -f "$key_file" ]] || die "public key file does not exist: $key_file"
+  "$SCRIPT_DIR/bin/codex-mobile-add-key" --check "$key_file"
+  cat >&2 <<'EOF'
+
+WARNING: OpenSSH key mode changes SSH exposure.
+The OpenSSH server may listen on non-Tailscale interfaces, depending on this
+machine's sshd configuration. codex-mobile does not change firewall rules,
+disable password authentication, or rewrite global sshd configuration.
+
+EOF
+fi
+
 [[ "$(uname -s)" == "Linux" ]] || die "the host installer currently supports Linux only"
 
 if ((EUID == 0)) && [[ -z "${CODEX_MOBILE_ALLOW_ROOT:-}" ]]; then
@@ -121,6 +158,39 @@ fi
 readonly BIN_DIR="${CODEX_MOBILE_BIN_DIR:-$HOME/.local/bin}"
 readonly CONFIG_DIR="${CODEX_MOBILE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/codex-mobile}"
 readonly TMUX_FILE="${CODEX_MOBILE_TMUX_FILE:-$HOME/.tmux.conf}"
+
+validate_tmux_markers() {
+  [[ -f "$TMUX_FILE" ]] || return 0
+
+  local end_count end_line reason start_count start_line
+  read -r start_count end_count start_line end_line < <(
+    awk -v start="$TMUX_MARKER_START" -v end="$TMUX_MARKER_END" '
+      $0 == start { start_count++; if (!start_line) start_line = NR }
+      $0 == end { end_count++; if (!end_line) end_line = NR }
+      END { print start_count + 0, end_count + 0, start_line + 0, end_line + 0 }
+    ' "$TMUX_FILE"
+  )
+
+  if [[ "$start_count" == 0 && "$end_count" == 0 ]]; then
+    return 0
+  elif [[ "$start_count" == 0 ]]; then
+    reason="an end marker exists without a start marker"
+  elif [[ "$end_count" == 0 ]]; then
+    reason="a start marker exists without an end marker"
+  elif [[ "$start_count" != 1 ]]; then
+    reason="$start_count start markers exist; exactly one is required"
+  elif [[ "$end_count" != 1 ]]; then
+    reason="$end_count end markers exist; exactly one is required"
+  elif ((start_line >= end_line)); then
+    reason="the end marker appears before the start marker"
+  else
+    return 0
+  fi
+
+  die "the codex-mobile block in $TMUX_FILE is malformed: $reason. Repair the marker block manually, then rerun the installer"
+}
+
+validate_tmux_markers
 
 distro_family=""
 distro_tokens=""
@@ -200,7 +270,7 @@ install_dependencies() {
 }
 
 append_tmux_source() {
-  local end_count start_count tmux_source
+  local tmux_source
 
   if [[ "$dry_run" == true ]]; then
     printf '  + add codex-mobile source block to %s\n' "$TMUX_FILE"
@@ -211,11 +281,6 @@ append_tmux_source() {
   touch -- "$TMUX_FILE"
 
   if grep -Fqx "$TMUX_MARKER_START" "$TMUX_FILE"; then
-    start_count="$(grep -Fxc "$TMUX_MARKER_START" "$TMUX_FILE")"
-    end_count="$(grep -Fxc "$TMUX_MARKER_END" "$TMUX_FILE" || true)"
-    if [[ "$start_count" != 1 || "$end_count" != 1 ]]; then
-      die "the codex-mobile block in $TMUX_FILE is malformed; fix it before reinstalling"
-    fi
     return
   fi
 
@@ -227,6 +292,25 @@ append_tmux_source() {
   fi
   printf '%s\nsource-file "%s"\n%s\n' \
     "$TMUX_MARKER_START" "$tmux_source" "$TMUX_MARKER_END" >>"$TMUX_FILE"
+}
+
+install_launcher() {
+  if [[ "$dry_run" == true ]]; then
+    printf '  + install version %q in %s\n' "$VERSION" "$BIN_DIR/codex-mobile"
+    return
+  fi
+
+  local temp_launcher
+  temp_launcher="$(mktemp "$BIN_DIR/.codex-mobile.XXXXXX")"
+  awk -v template="$LAUNCHER_VERSION_TEMPLATE" -v version="$VERSION" '
+    $0 == template {
+      print "CODEX_MOBILE_VERSION=\"" version "\""
+      next
+    }
+    { print }
+  ' "$SCRIPT_DIR/bin/codex-mobile" >"$temp_launcher"
+  chmod 0755 -- "$temp_launcher"
+  mv -- "$temp_launcher" "$BIN_DIR/codex-mobile"
 }
 
 tailscale_is_running() {
@@ -283,13 +367,12 @@ fi
 
 note "Installing codex-mobile $VERSION"
 run install -d -m 0755 "$BIN_DIR" "$CONFIG_DIR"
-run install -m 0755 "$SCRIPT_DIR/bin/codex-mobile" "$BIN_DIR/codex-mobile"
+install_launcher
 run install -m 0755 "$SCRIPT_DIR/bin/codex-mobile-add-key" "$BIN_DIR/codex-mobile-add-key"
 run install -m 0644 "$SCRIPT_DIR/config/tmux.conf" "$CONFIG_DIR/tmux.conf"
 append_tmux_source
 
 if [[ -n "$key_file" ]]; then
-  [[ -f "$key_file" ]] || die "public key file does not exist: $key_file"
   if [[ "$dry_run" == true ]]; then
     print_command "$BIN_DIR/codex-mobile-add-key" "$key_file"
   else
